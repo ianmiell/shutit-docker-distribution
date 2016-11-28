@@ -16,19 +16,24 @@ class shutit_docker_distribution(ShutItModule):
 		run_dir = os.path.dirname(os.path.abspath(inspect.getsourcefile(lambda:0))) + '/vagrant_run'
 		module_name = 'shutit_docker_distribution_' + ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(6))
 		shutit.send('command rm -rf ' + run_dir + '/' + module_name + ' && command mkdir -p ' + run_dir + '/' + module_name + ' && command cd ' + run_dir + '/' + module_name)
+		if shutit.send_and_get_output('vagrant plugin list | grep landrush') == '':
+			shutit.send('vagrant plugin install landrush')
 		shutit.send('vagrant init ' + vagrant_image)
-		shutit.send_file(run_dir + '/' + module_name + '/Vagrantfile','''
-Vagrant.configure(2) do |config|
-  config.vm.box = "''' + vagrant_image + '''"
-  # config.vm.box_check_update = false
-  # config.vm.network "forwarded_port", guest: 80, host: 8080
-  # config.vm.network "private_network", ip: "192.168.33.10"
-  # config.vm.network "public_network"
-  # config.vm.synced_folder "../data", "/vagrant_data"
+		shutit.send_file(run_dir + '/' + module_name + '/Vagrantfile','''Vagrant.configure("2") do |config|
+  config.landrush.enabled = true
   config.vm.provider "virtualbox" do |vb|
     vb.gui = ''' + gui + '''
     vb.memory = "''' + memory + '''"
-    vb.name = "shutit_docker_distribution"
+  end
+
+  config.vm.define "distributionserver" do |distributionserver|
+    distributionserver.vm.box = ''' + '"' + vagrant_image + '"' + '''
+    distributionserver.vm.hostname = "distributionserver.vagrant.test"
+  end
+
+  config.vm.define "client1" do |client1|
+    client1.vm.box = ''' + '"' + vagrant_image + '"' + '''
+    client1.vm.hostname = "client1.vagrant.test"
   end
 end''')
 		pw = shutit.get_env_pass()
@@ -36,20 +41,22 @@ end''')
 			shutit.multisend('vagrant up --provider ' + shutit.cfg['shutit-library.virtualization.virtualization.virtualization']['virt_method'],{'assword for':pw},timeout=99999)
 		except:
 			shutit.multisend('vagrant up',{'assword for':pw},timeout=99999)
-		shutit.login(command='vagrant ssh')
+		distributionserver_ip = shutit.send_and_get_output('''vagrant landrush ls | grep -w ^distributionserver.vagrant.test | awk '{print $2}' ''')
+		client1_ip = shutit.send_and_get_output('''vagrant landrush ls | grep -w ^client1.vagrant.test | awk '{print $2}' ''')
+		shutit.login(command='vagrant ssh distributionserver')
 		shutit.login(command='sudo su -',password='vagrant')
 
-
+		shutit.pause_point('')
 
 		shutit.logout()
 		shutit.logout()
 		return True
 
 	def get_config(self, shutit):
-		shutit.get_config(self.module_id,'vagrant_image',default='ubuntu/trusty64')
+		shutit.get_config(self.module_id,'vagrant_image',default='centos/7')
 		shutit.get_config(self.module_id,'vagrant_provider',default='virtualbox')
 		shutit.get_config(self.module_id,'gui',default='false')
-		shutit.get_config(self.module_id,'memory',default='1024')
+		shutit.get_config(self.module_id,'memory',default='512')
 
 		return True
 
@@ -75,7 +82,7 @@ end''')
 
 def module():
 	return shutit_docker_distribution(
-		'imiell.shutit_docker_distribution.shutit_docker_distribution', 1644823336.0001,
+		'imiell.shutit_docker_distribution.shutit_docker_distribution', 53766448.0001,
 		description='',
 		maintainer='',
 		delivery_methods=['bash'],
