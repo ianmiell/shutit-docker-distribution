@@ -46,6 +46,11 @@ end''')
 		shutit.login(command='vagrant ssh distributionserver')
 		shutit.login(command='sudo su -',password='vagrant')
 
+		shutit.install('git')
+		shutit.install('docker')
+		shutit.send('systemctl enable docker')
+		shutit.send('docker pull registry:2')
+		shutit.send('docker run -d registry:2')
 		shutit.pause_point('')
 
 		shutit.logout()
